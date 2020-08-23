@@ -21,6 +21,29 @@ def filter_instances(project):
 def cli():
     """Shotty manages snapshots"""
 
+@cli.group('snapshots')
+def snapshots():
+    """Commands for snapshots"""
+
+@snapshots.command('list')
+@click.option('--project', default='acloud.guru', help="Only snapshots for project (tag Project:<name>)")
+def list_snapshots(project):
+    "List ec2 snapshots"
+    
+    instances = filter_instances(project)
+    
+    for i in instances:
+        for v in i.volumes.all():
+            for s in v.snapshots.all():
+                print(", ".join((
+                    s.id,
+                    v.id,
+                    i.id,
+                    s.state,
+                    s.progress,
+                    s.start_time.strftime("%c") + " UTC")))  
+    return
+
 @cli.group('volumes')
 def volumes():
     """Commands for volumes"""
@@ -89,6 +112,31 @@ def start_instances(project):
     for i in instances:
         print("Starting instance " + i.id + "...")
         i.start()
+    return
+
+@instances.command('snapshot')
+@click.option('--project', default='acloud.guru', help="Only instances for project (tag Project:<name>)")
+def create_snapshots(project):
+    "Snapshot ec2 instances"
+    
+    instances = filter_instances(project)
+
+    tag = [
+        {
+            'ResourceType': 'snapshot',
+            'Tags': [
+                {
+                    'Key': 'Project',
+                    'Value': 'acloud.guru'
+                },
+            ]
+        },
+    ]
+
+    for i in instances:
+        for v in i.volumes.all():
+            print("Creating snapshot of  " + v.id + "...")
+            v.create_snapshot(Description='Created by shotty',TagSpecifications=tag)
     return
 
 
