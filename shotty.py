@@ -1,4 +1,5 @@
 import boto3
+import botocore
 import click
 
 session = boto3.Session(profile_name="acloudguru")
@@ -98,7 +99,11 @@ def stop_instances(project):
 
     for i in instances:
         print("Stopping instance " + i.id + "...")
-        i.stop()
+        try:
+            i.stop()
+        except botocore.exceptions.ClientError as e:
+            print("Can not stop instance " + i.id + "\n" + str(e))
+            continue
     return
 
 
@@ -111,7 +116,11 @@ def start_instances(project):
 
     for i in instances:
         print("Starting instance " + i.id + "...")
-        i.start()
+        try:
+            i.start()
+        except botocore.exceptions.ClientError as e:
+            print("Can not start instance " + i.id + "\n" + str(e))
+            continue
     return
 
 @instances.command('snapshot')
