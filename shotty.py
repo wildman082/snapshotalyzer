@@ -134,9 +134,17 @@ def create_snapshots(project):
     ]
 
     for i in instances:
+        print("Stopping instance " + i.id + "...")
+        i.stop()
+        i.wait_until_stopped()
         for v in i.volumes.all():
-            print("Creating snapshot of  " + v.id + "...")
+            print("Creating snapshot of " + v.id + "...")
             v.create_snapshot(Description='Created by shotty',TagSpecifications=tag)
+        print("Starting instance " + i.id + "...")
+        i.start()
+        i.wait_until_running()
+    
+    print("Done!")
     return
 
 
