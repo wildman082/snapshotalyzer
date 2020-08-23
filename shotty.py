@@ -28,7 +28,8 @@ def snapshots():
 
 @snapshots.command('list')
 @click.option('--project', default='acloud.guru', help="Only snapshots for project (tag Project:<name>)")
-def list_snapshots(project):
+@click.option('--all', 'list_all', default=False, is_flag=True, help="list all snapshots, not just the most recent")
+def list_snapshots(project, list_all):
     "List ec2 snapshots"
     
     instances = filter_instances(project)
@@ -43,6 +44,7 @@ def list_snapshots(project):
                     s.state,
                     s.progress,
                     s.start_time.strftime("%c") + " UTC")))  
+                if s.state == 'completed' and not list_all: break
     return
 
 @cli.group('volumes')
