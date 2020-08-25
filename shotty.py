@@ -79,11 +79,18 @@ def instances():
 
 
 @instances.command('list')
-@click.option('--project', default='acloud.guru', help="Only instances for project (tag Project:<name>)")
-def list_instances(project):
+@click.option('--project', help="Only snapshots for project (tag Project:<name>)")
+@click.option('--force', 'all_instances', default=False, is_flag=True, help="all ec2 instances, no tag specified")
+def list_instances(project, all_instances):
     "List ec2 instances"
     
-    instances = filter_instances(project)
+    if project:
+        instances = filter_instances(project)
+    elif all_instances:
+        instances = ec2.instances.all()
+    else:
+        print("Must use --force switch if no project specified")
+        exit(1)
     
     for i in instances:
         tags = { t['Key']: t['Value'] for t in i.tags or [] }
