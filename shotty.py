@@ -2,9 +2,6 @@ import boto3
 import botocore
 import click
 
-session = boto3.Session(profile_name="acloudguru")
-ec2 = session.resource('ec2')
-
 
 def filter_instances(project):
     instances = []
@@ -21,9 +18,14 @@ def has_pending_snapshot(volume):
     snapshots = list(volume.snapshots.all())
     return snapshots and snapshots[0].state == 'pending'
 
-@click.group()
-def cli():
+
+@click.group('cli')
+@click.option('--profile', default='acloudguru', help="Specify AWS CLI profile")
+def cli(profile):
     """Shotty manages snapshots"""
+    session = boto3.Session(profile_name=profile)
+    global ec2
+    ec2 = session.resource('ec2')
 
 @cli.group('snapshots')
 def snapshots():
@@ -123,6 +125,29 @@ def start_instances(project):
         print("Starting instance " + i.id + "...")
         try:
             i.start()
+        except botocore.exceptions.ClientError as e:
+            print("Can not start instance " + i.id + "\n" + str(e))
+            continue
+    return
+
+@instances.command('reboot')
+@click.option('--project', default='acloud.guru', help="Only instances for project (tag Project:<name>)")
+def reboot_instances(project):
+    "Reboot ec2 instances"
+    
+    instances = filter_instances(project)
+
+    for i in instances:
+        print("Rebooting instance " + i.id + "...")
+        try:
+            i.stop()
+        except botocore.exceptions.ClientError as e:
+            print("Can not start instance " + i.id + "\n" + str(e))
+            continue
+        i.wait_until_stopped()
+        try:
+            i.start()
+            
         except botocore.exceptions.ClientError as e:
             print("Can not start instance " + i.id + "\n" + str(e))
             continue
