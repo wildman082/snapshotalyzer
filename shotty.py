@@ -3,10 +3,15 @@ import botocore
 import click
 
 
-def filter_instances(project):
+def filter_instances(project, instance): 
     instances = []
-
-    if project:
+    if instance and not project:
+        instanceFilter = [{'Name': 'instance-id', 'Values': [instance]}]
+        instances = ec2.instances.filter(Filters=instanceFilter)
+    elif project and instance:
+        projectFilter = [{'Name': 'tag:Project', 'Values': [project]},{'Name': 'instance-id', 'Values': [instance]}]
+        instances = ec2.instances.filter(Filters=projectFilter)
+    elif project:
         projectFilter = [{'Name': 'tag:Project', 'Values': [project]}]
         instances = ec2.instances.filter(Filters=projectFilter)
     else:
@@ -32,12 +37,13 @@ def snapshots():
     """Commands for snapshots"""
 
 @snapshots.command('list')
+@click.option('--instance', default=None, help="specify a single instance")
 @click.option('--project', default='acloud.guru', help="Only snapshots for project (tag Project:<name>)")
 @click.option('--all', 'list_all', default=False, is_flag=True, help="list all snapshots, not just the most recent")
-def list_snapshots(project, list_all):
+def list_snapshots(project, list_all, instance):
     "List ec2 snapshots"
     
-    instances = filter_instances(project)
+    instances = filter_instances(project, instance)
     
     for i in instances:
         for v in i.volumes.all():
@@ -57,11 +63,12 @@ def volumes():
     """Commands for volumes"""
 
 @volumes.command('list')
+@click.option('--instance', default=None, help="specify a single instance")
 @click.option('--project', default='acloud.guru', help="Only volumes for project (tag Project:<name>)")
-def list_volumes(project):
+def list_volumes(project, instance):
     "List ec2 volumes"
     
-    instances = filter_instances(project)
+    instances = filter_instances(project, instance)
     
     for i in instances:
         for v in i.volumes.all():
@@ -79,13 +86,14 @@ def instances():
 
 
 @instances.command('list')
+@click.option('--instance', default=None, help="specify a single instance")
 @click.option('--project', help="Only snapshots for project (tag Project:<name>)")
 @click.option('--force', 'all_instances', default=False, is_flag=True, help="all ec2 instances, no tag specified")
-def list_instances(project, all_instances):
+def list_instances(project, all_instances, instance):
     "List ec2 instances"
     
     if project:
-        instances = filter_instances(project)
+        instances = filter_instances(project, instance)
     elif all_instances:
         instances = ec2.instances.all()
     else:
@@ -105,11 +113,12 @@ def list_instances(project, all_instances):
 
 
 @instances.command('stop')
+@click.option('--instance', default=None, help="specify a single instance")
 @click.option('--project', default='acloud.guru', help="Only instances for project (tag Project:<name>)")
-def stop_instances(project):
+def stop_instances(project, instance):
     "Stop ec2 instances"
     
-    instances = filter_instances(project)
+    instances = filter_instances(project, instance)
 
     for i in instances:
         print("Stopping instance " + i.id + "...")
@@ -122,11 +131,12 @@ def stop_instances(project):
 
 
 @instances.command('start')
+@click.option('--instance', default=None, help="specify a single instance")
 @click.option('--project', default='acloud.guru', help="Only instances for project (tag Project:<name>)")
-def start_instances(project):
+def start_instances(project, instance):
     "Stop ec2 instances"
     
-    instances = filter_instances(project)
+    instances = filter_instances(project, instance)
 
     for i in instances:
         print("Starting instance " + i.id + "...")
@@ -138,11 +148,12 @@ def start_instances(project):
     return
 
 @instances.command('reboot')
+@click.option('--instance', default=None, help="specify a single instance")
 @click.option('--project', default='acloud.guru', help="Only instances for project (tag Project:<name>)")
-def reboot_instances(project):
+def reboot_instances(project, instance):
     "Reboot ec2 instances"
     
-    instances = filter_instances(project)
+    instances = filter_instances(project, instance)
 
     for i in instances:
         print("Rebooting instance " + i.id + "...")
@@ -161,11 +172,12 @@ def reboot_instances(project):
     return
 
 @instances.command('snapshot')
+@click.option('--instance', default=None, help="specify a single instance")
 @click.option('--project', default='acloud.guru', help="Only instances for project (tag Project:<name>)")
-def create_snapshots(project):
+def create_snapshots(project, instance):
     "Snapshot ec2 instances"
     
-    instances = filter_instances(project)
+    instances = filter_instances(project, instance)
 
     tag = [
         {
@@ -180,17 +192,24 @@ def create_snapshots(project):
     ]
 
     for i in instances:
-        print("Stopping instance " + i.id + "...")
-        i.stop()
+        wasRunning = True if i.state['Name'] == "running" else False
+        if wasRunning:
+            print("Stopping instance " + i.id + "...")
+            i.stop()
         i.wait_until_stopped()
         for v in i.volumes.all():
             if has_pending_snapshot(v):
                 print("Skipping "+ v.id + ", snapshot already in progress")
-            print("Creating snapshot of " + v.id + "...")
-            v.create_snapshot(Description='Created by shotty',TagSpecifications=tag)
-        print("Starting instance " + i.id + "...")
-        i.start()
-        i.wait_until_running()
+            else:
+                print("Creating snapshot of " + v.id + "...")
+                try:
+                    v.create_snapshot(Description='Created by shotty',TagSpecifications=tag)
+                except botocore.exceptions.ClientError as e:
+                    print("Can not snapshot instance " + i.id + "\n" + str(e))
+        if wasRunning:
+            print("Starting instance " + i.id + "...")
+            i.start()
+            i.wait_until_running()
     
     print("Done!")
     return
